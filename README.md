@@ -211,6 +211,26 @@ The compose stack binds nothing to a public interface: `web` listens on
 compose network. That matters — Docker writes its own iptables rules and a
 `0.0.0.0` publish would bypass ufw entirely.
 
+### Sharing 443 with Xray
+
+The host also runs an Xray (3x-ui) VLESS inbound, and **nginx owns 443/tcp
+alone**. Xray listens on `127.0.0.1:8880` in plaintext over WebSocket; nginx
+proxies exactly one path to it — `VLESS_PATH` from `deploy.env` — and serves
+the site on everything else. Consequences worth knowing:
+
+- The site is the cover traffic. A probe of any other path, including the bare
+  domain, gets the real portfolio, because it *is* the real portfolio.
+- Only nginx holds a certificate, so a renewal needs `systemctl reload nginx`
+  and nothing else, and the site does not depend on Xray running. The reverse
+  arrangement — Xray terminating TLS on 443 and falling back to nginx — makes a
+  crashed Xray take the site down with it.
+- WebSocket, not XHTTP or QUIC: it is the one transport every client in use
+  supports (sing-box/podkop included). It rules out XTLS Vision, which is why
+  the inbound's clients carry an empty `flow`.
+- nginx's `proxy_pass` cannot speak the PROXY protocol, so Xray sees every
+  client as `127.0.0.1`. Per-client traffic accounting still works; the panel's
+  IP limit and IP log do not.
+
 ### First-time setup on a fresh server
 
 1. `git clone` the repository into the directory of your choice — call it `$APP_DIR`.

@@ -9,9 +9,10 @@
 # and the redirects. A rendered file must contain no doubled at-signs at all.
 #
 # This is also the sole TLS endpoint on the box: besides the site itself, it
-# fronts a VLESS+XHTTP inbound (Xray, loopback-only, plaintext — see the
-# @@XHTTP_PATH@@ location below) on the same 443/tcp port. Xray never touches
-# a certificate; nginx's is the only one that matters.
+# fronts a VLESS+WebSocket inbound (Xray, loopback-only, plaintext — see the
+# @@VLESS_PATH@@ location below) on the same 443/tcp port. Xray never touches
+# a certificate; nginx's is the only one that matters, and nothing outside this
+# file has to be running for the site to answer.
 #
 # Ports: 80 and 443/tcp only. Nothing listens on udp.
 
@@ -80,21 +81,34 @@ server {
 
     client_max_body_size 1m;
 
-    # XHTTP backend for the VLESS inbound. Xray listens on loopback, plaintext
-    # — nginx does TLS. No trailing slash on proxy_pass: the matched prefix
-    # must reach Xray unchanged, it has to equal
-    # streamSettings.xhttpSettings.path exactly.
-    location @@XHTTP_PATH@@/ {
+    # The VLESS inbound. Xray listens on loopback in plaintext — nginx does the
+    # TLS, so from outside this is an ordinary WebSocket request to the site,
+    # and every other path (including whatever a scanner probes) gets the real
+    # site below.
+    #
+    # An exact-match location, so the secret path cannot shadow a route of the
+    # site, and no trailing slash on proxy_pass, so the URI reaches Xray
+    # unchanged — it must equal streamSettings.wsSettings.path exactly. The
+    # query string some clients append (?ed=…) does not affect location
+    # matching.
+    #
+    # Upgrade/Connection are what make this a WebSocket proxy rather than a
+    # plain one; without them Xray never sees a handshake. $connection_upgrade
+    # comes from the map above. Buffering off keeps latency down, and the long
+    # read timeout stops nginx from cutting an idle tunnel.
+    location = @@VLESS_PATH@@ {
         proxy_pass              http://127.0.0.1:8880;
         proxy_http_version      1.1;
+        proxy_set_header        Upgrade           $http_upgrade;
+        proxy_set_header        Connection        $connection_upgrade;
         proxy_set_header        Host              $host;
         proxy_set_header        X-Real-IP         $remote_addr;
         proxy_set_header        X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header        X-Forwarded-Proto $scheme;
-        proxy_set_header        Connection        "";
         proxy_buffering         off;
         proxy_request_buffering off;
         proxy_read_timeout      300s;
+        proxy_send_timeout      300s;
     }
 
     location / {
