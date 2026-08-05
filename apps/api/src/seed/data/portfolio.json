@@ -1,0 +1,71 @@
+{
+  "profile": {
+    "key": "default",
+    "name": "Andrey Mazurov",
+    "headline": "Fullstack JavaScript Developer",
+    "bio": "I build web applications end to end: from React and Vue interfaces to Node.js services, databases and deployment.",
+    "cvUrl": "/cv.pdf",
+    "copyrightYear": 2026,
+    "locale": "en-US",
+    "seo": {
+      "title": "Andrey Mazurov — Fullstack JavaScript Developer",
+      "description": "Portfolio of a fullstack JavaScript developer: React, Next.js, TypeScript, Node.js, NestJS, PostgreSQL, MongoDB, Docker. Contacts and CV.",
+      "keywords": [
+        "fullstack developer",
+        "javascript developer",
+        "typescript",
+        "react developer",
+        "node.js developer",
+        "portfolio",
+        "Andrey Mazurov"
+      ],
+      "ogImage": "/og.png"
+    }
+  },
+  "techs": [
+    { "name": "React", "icon": "devicon:react", "order": 0, "visible": true },
+    { "name": "Next.js", "icon": "devicon-plain:nextjs", "order": 1, "visible": true },
+    { "name": "TypeScript", "icon": "devicon:typescript", "order": 2, "visible": true },
+    { "name": "Redux", "icon": "devicon:redux", "order": 3, "visible": true },
+    { "name": "Tailwind CSS", "icon": "devicon:tailwindcss", "order": 4, "visible": true },
+    { "name": "Node.js", "icon": "devicon:nodejs", "order": 5, "visible": true },
+    { "name": "Express", "icon": "devicon:express", "order": 6, "visible": true },
+    { "name": "NestJS", "icon": "devicon:nestjs", "order": 7, "visible": true },
+    { "name": "GraphQL", "icon": "devicon-plain:graphql", "order": 8, "visible": true },
+    { "name": "PostgreSQL", "icon": "devicon:postgresql", "order": 9, "visible": true },
+    { "name": "MongoDB", "icon": "devicon:mongodb", "order": 10, "visible": true },
+    { "name": "Redis", "icon": "devicon:redis", "order": 11, "visible": true },
+    { "name": "Docker", "icon": "devicon:docker", "order": 12, "visible": true },
+    { "name": "Git", "icon": "devicon:git", "order": 13, "visible": true },
+    { "name": "AWS", "icon": "devicon-plain:amazonwebservices", "order": 14, "visible": true },
+    { "name": "Nginx", "icon": "devicon:nginx", "order": 15, "visible": true },
+    { "name": "Jest", "icon": "devicon-plain:jest", "order": 16, "visible": true },
+    { "name": "Webpack", "icon": "devicon:webpack", "order": 17, "visible": true }
+  ],
+  "contactLinks": [
+    {
+      "label": "LinkedIn",
+      "value": "linkedin.com/in/andrey-mazurov-dev",
+      "href": "https://linkedin.com/in/andrey-mazurov-dev",
+      "icon": "ph:linkedin-logo",
+      "order": 0,
+      "visible": true
+    },
+    {
+      "label": "Telegram",
+      "value": "@amazurov_dev",
+      "href": "https://t.me/amazurov_dev",
+      "icon": "ph:telegram-logo",
+      "order": 1,
+      "visible": true
+    },
+    {
+      "label": "Email",
+      "value": "andrey.mazurov.dev@gmail.com",
+      "href": "mailto:andrey.mazurov.dev@gmail.com",
+      "icon": "ph:envelope-simple",
+      "order": 2,
+      "visible": true
+    }
+  ]
+}

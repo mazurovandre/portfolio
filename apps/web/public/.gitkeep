@@ -1,0 +1,9 @@
+This directory is served from the site root as-is.
+
+Add these files by hand:
+  cv.pdf  — the CV behind the "Open CV" button (path: profile.cvUrl)
+  og.png  — social preview, 1200x630 (path: profile.seo.ogImage)
+
+robots.txt and sitemap.xml are deliberately absent here: they are generated
+by the @nuxtjs/robots and @nuxtjs/sitemap modules. A static file would
+shadow the generated one and drift from NUXT_PUBLIC_SITE_URL.

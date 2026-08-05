@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/.output
+**/.nuxt
+**/.nitro
+**/.cache
+**/.turbo
+**/coverage
+.git
+.idea
+.vscode
+.env
+.env.*
+!.env.example
+**/*.log
+.DS_Store

@@ -1,0 +1,6 @@
+{
+  // Nuxt generates this config during `nuxt prepare` — it knows about
+  // auto-imports, aliases and module types. Add your own settings there,
+  // not on top of it.
+  "extends": "./.nuxt/tsconfig.json"
+}

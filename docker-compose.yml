@@ -1,0 +1,68 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB}
+    ports:
+      # This port is only needed for local development (pnpm dev, seed).
+      # Remove this mapping on a production server.
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/${MONGO_DB}?authSource=admin
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      IP_HASH_SALT: ${IP_HASH_SALT}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX}
+      RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW}
+    # The port is deliberately not published: the API is reachable only inside
+    # the compose network. The single public entry point is `web`.
+    expose:
+      - '4000'
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NITRO_HOST: 0.0.0.0
+      NITRO_PORT: 3000
+      API_INTERNAL_URL: http://api:4000
+      NUXT_PUBLIC_SITE_URL: ${NUXT_PUBLIC_SITE_URL}
+    ports:
+      - '3000:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  mongo-data:
