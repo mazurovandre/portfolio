@@ -8,10 +8,12 @@
 # envsubst would blank every one of them, silently breaking the proxy headers
 # and the redirects. A rendered file must contain no doubled at-signs at all.
 #
-# nginx runs on the host rather than in the compose stack because it also owns
-# the certificates that the Xray Hysteria2 inbound reads.
+# This is also the sole TLS endpoint on the box: besides the site itself, it
+# fronts a VLESS+XHTTP inbound (Xray, loopback-only, plaintext — see the
+# @@XHTTP_PATH@@ location below) on the same 443/tcp port. Xray never touches
+# a certificate; nginx's is the only one that matters.
 #
-# Ports: 80 and 443/tcp here; 443/udp belongs to Hysteria2 (3x-ui).
+# Ports: 80 and 443/tcp only. Nothing listens on udp.
 
 upstream portfolio_web {
     server 127.0.0.1:3000;
@@ -78,6 +80,23 @@ server {
 
     client_max_body_size 1m;
 
+    # XHTTP backend for the VLESS inbound. Xray listens on loopback, plaintext
+    # — nginx does TLS. No trailing slash on proxy_pass: the matched prefix
+    # must reach Xray unchanged, it has to equal
+    # streamSettings.xhttpSettings.path exactly.
+    location @@XHTTP_PATH@@/ {
+        proxy_pass              http://127.0.0.1:8880;
+        proxy_http_version      1.1;
+        proxy_set_header        Host              $host;
+        proxy_set_header        X-Real-IP         $remote_addr;
+        proxy_set_header        X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Proto $scheme;
+        proxy_set_header        Connection        "";
+        proxy_buffering         off;
+        proxy_request_buffering off;
+        proxy_read_timeout      300s;
+    }
+
     location / {
         proxy_pass         http://portfolio_web;
         proxy_http_version 1.1;
@@ -102,22 +121,4 @@ server {
     ssl_certificate_key @@CERT_DIR@@/@@SITE_DOMAIN@@/privkey.pem;
 
     return 301 https://@@SITE_DOMAIN@@$request_uri;
-}
-
-# --- Hysteria2 masquerade backend ------------------------------------------
-# The 443/udp Hysteria2 inbound proxies anything that is not a valid Hysteria2
-# handshake to this listener, so an HTTP/3 probe of the QUIC port gets the very
-# same page as a normal browser. Loopback only.
-server {
-    listen 127.0.0.1:@@MASQUERADE_PORT@@;
-    server_name _;
-
-    location / {
-        proxy_pass         http://portfolio_web;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              @@SITE_DOMAIN@@;
-        proxy_set_header   X-Forwarded-Proto https;
-        proxy_set_header   Upgrade           $http_upgrade;
-        proxy_set_header   Connection        $connection_upgrade;
-    }
 }

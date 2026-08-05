@@ -195,7 +195,7 @@ Required GitHub Actions secrets: `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`.
 | `$APP_DIR/.env`, `$APP_DIR/deploy.env` | Config, outside git, never touched by a deploy |
 | `/usr/local/bin/portfolio-deploy` | Symlink to `scripts/server-deploy.sh` — the stable entry point |
 | `/etc/nginx/sites-available/portfolio.conf` | **Generated** from `deploy/nginx/*.template` on every deploy |
-| `$CERT_DIR/<domain>/` | acme.sh certificates, shared with the 3x-ui Hysteria2 inbound |
+| `$CERT_DIR/<domain>/` | acme.sh certificates for the site — the only TLS Xray sees is nginx's, terminated in front of it |
 
 Deploys reach the server through the `portfolio-deploy` symlink, so neither the
 scripts nor the CI workflow contains a path into the deployment.

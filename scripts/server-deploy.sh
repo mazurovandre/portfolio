@@ -19,15 +19,16 @@ source "$APP_DIR/scripts/lib/config.sh"
 load_deploy_env "$APP_DIR"
 
 BRANCH="${BRANCH:-main}"
-MASQUERADE_PORT="${MASQUERADE_PORT:-8080}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-30}"
 REDIRECT_DOMAINS="${REDIRECT_DOMAINS:-}"
-# SITE_DOMAIN and CERT_DIR have no defaults on purpose: they are the two values
-# that describe *this* server, and guessing either would render a config that
-# points at the wrong host or at certificates that do not exist. The remaining
-# settings above are internal conventions, not environment identity.
-require_var SITE_DOMAIN CERT_DIR
+# SITE_DOMAIN, CERT_DIR and XHTTP_PATH have no defaults on purpose: the first
+# two describe *this* server, and guessing either would render a config that
+# points at the wrong host or at certificates that do not exist. XHTTP_PATH is
+# the secret path the VLESS+XHTTP inbound is reachable on — a guessable
+# default would defeat the point of it being secret. The remaining settings
+# above are internal conventions, not environment identity.
+require_var SITE_DOMAIN CERT_DIR XHTTP_PATH
 
 NGINX_AVAILABLE=/etc/nginx/sites-available/portfolio.conf
 
@@ -49,7 +50,7 @@ echo "    now at $(git rev-parse --short HEAD) — $(git log -1 --pretty=%s)"
 render() {
   sed -e "s|@@SITE_DOMAIN@@|$SITE_DOMAIN|g" \
       -e "s|@@CERT_DIR@@|$CERT_DIR|g" \
-      -e "s|@@MASQUERADE_PORT@@|$MASQUERADE_PORT|g" \
+      -e "s|@@XHTTP_PATH@@|$XHTTP_PATH|g" \
       -e "s|@@REDIRECT_DOMAIN@@|${1:-}|g" \
       "$2"
 }
