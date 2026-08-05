@@ -1,17 +1,35 @@
 #!/usr/bin/env bash
 #
-# Runs ON THE SERVER. Both entry points end up here:
+# Runs ON THE SERVER, reached through the /usr/local/bin/portfolio-deploy
+# symlink. Both entry points end up here:
 #   - GitHub Actions (.github/workflows/deploy.yml) over SSH
 #   - `pnpm run deploy` from a laptop (scripts/deploy.sh)
 #
-# Fetches main, rebuilds the images and waits for the stack to report healthy.
-# `.env` lives outside git in $APP_DIR and is never touched.
+# Fetches the branch, renders and applies the nginx config, rebuilds the images
+# and waits for the stack to report healthy.
+#
+# APP_DIR is derived from this script's own location, so no path to the
+# deployment is hardcoded anywhere in the repository. `.env` (app secrets) and
+# `deploy.env` (topology) both live in APP_DIR, outside git, and are never
+# written to by a deploy.
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/opt/portfolio}"
+APP_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+source "$APP_DIR/scripts/lib/config.sh"
+load_deploy_env "$APP_DIR"
+
 BRANCH="${BRANCH:-main}"
+MASQUERADE_PORT="${MASQUERADE_PORT:-8080}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-30}"
+REDIRECT_DOMAINS="${REDIRECT_DOMAINS:-}"
+# SITE_DOMAIN and CERT_DIR have no defaults on purpose: they are the two values
+# that describe *this* server, and guessing either would render a config that
+# points at the wrong host or at certificates that do not exist. The remaining
+# settings above are internal conventions, not environment identity.
+require_var SITE_DOMAIN CERT_DIR
+
+NGINX_AVAILABLE=/etc/nginx/sites-available/portfolio.conf
 
 cd "$APP_DIR"
 
@@ -25,6 +43,56 @@ git fetch --prune origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 echo "    now at $(git rev-parse --short HEAD) — $(git log -1 --pretty=%s)"
 
+# --- nginx ------------------------------------------------------------------
+# sed, not envsubst: the templates rely on nginx's own $host, $request_uri and
+# friends, which envsubst would happily blank out.
+render() {
+  sed -e "s|@@SITE_DOMAIN@@|$SITE_DOMAIN|g" \
+      -e "s|@@CERT_DIR@@|$CERT_DIR|g" \
+      -e "s|@@MASQUERADE_PORT@@|$MASQUERADE_PORT|g" \
+      -e "s|@@REDIRECT_DOMAIN@@|${1:-}|g" \
+      "$2"
+}
+
+echo "==> Rendering the nginx config for $SITE_DOMAIN"
+rendered="$(mktemp)"
+trap 'rm -f "$rendered"' EXIT
+render "" deploy/nginx/site.conf.template > "$rendered"
+for domain in $REDIRECT_DOMAINS; do
+  echo "    + 301 vhost for $domain"
+  printf '\n' >> "$rendered"
+  render "$domain" deploy/nginx/redirect.conf.template >> "$rendered"
+done
+
+if cmp -s "$rendered" "$NGINX_AVAILABLE" 2>/dev/null; then
+  echo "    unchanged, not reloading nginx"
+else
+  backup=""
+  if [[ -f "$NGINX_AVAILABLE" ]]; then
+    backup="$(mktemp)"
+    cp "$NGINX_AVAILABLE" "$backup"
+  fi
+
+  cp "$rendered" "$NGINX_AVAILABLE"
+  ln -sfn "$NGINX_AVAILABLE" /etc/nginx/sites-enabled/portfolio.conf
+
+  if ! nginx -t; then
+    echo "error: the rendered nginx config is invalid — restoring the previous one." >&2
+    if [[ -n "$backup" ]]; then
+      cp "$backup" "$NGINX_AVAILABLE"
+      rm -f "$backup"
+    else
+      rm -f "$NGINX_AVAILABLE" /etc/nginx/sites-enabled/portfolio.conf
+    fi
+    exit 1
+  fi
+
+  rm -f "$backup"
+  systemctl reload nginx
+  echo "    applied and reloaded"
+fi
+
+# --- application ------------------------------------------------------------
 echo "==> Building and starting containers"
 docker compose up -d --build --remove-orphans
 

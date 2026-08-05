@@ -11,6 +11,11 @@ coverage/
 .env.*
 !.env.example
 
+# Deployment topology. Not matched by the .env rules above — it needs its own
+# line, and getting it wrong would commit the server address.
+deploy.env
+!deploy.env.example
+
 *.log
 npm-debug.log*
 pnpm-debug.log*

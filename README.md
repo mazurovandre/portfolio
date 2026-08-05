@@ -154,14 +154,30 @@ already describes.
 
 ## Deployment
 
-Production is **https://mazurovandre.online** on `78.17.80.141`.
-`mazurovandre.ru` 301-redirects there.
+Production is **https://mazurovandre.online**, with `mazurovandre.ru`
+301-redirecting there.
+
+### Two kinds of configuration
+
+The repository describes *how* to deploy and says nothing about *where*. Two
+gitignored files supply the rest, and neither is ever written to by a deploy:
+
+| File | Holds | Example |
+| --- | --- | --- |
+| `.env` | Application runtime config and secrets | `.env.example` |
+| `deploy.env` | Deployment topology: host, domain, paths | `deploy.env.example` |
+
+`deploy.env` lives both on the developer machine that runs `pnpm run deploy`
+and in the checkout on the server. Nothing in it is secret — the domain and the
+host address are in public DNS — it is kept out of git so the same tree can be
+aimed at a staging box by editing one file. The deploy scripts have no fallback
+defaults for these values: a silent default is how you deploy to the wrong host.
 
 ### How a deploy happens
 
 Both routes run the same script on the server, `scripts/server-deploy.sh`,
-which fetches `origin/main`, rebuilds the images and waits for the site to
-answer 200 before declaring success:
+which fetches `origin/main`, renders and applies the nginx config, rebuilds the
+images and waits for the site to answer 200 before declaring success:
 
 - **Automatic** — any push to `main` triggers `.github/workflows/deploy.yml`,
   which typechecks and tests first, then deploys over SSH.
@@ -175,10 +191,20 @@ Required GitHub Actions secrets: `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`.
 
 | Path | What it is |
 | --- | --- |
-| `/opt/portfolio` | Git checkout of `main`; the compose project lives here |
-| `/opt/portfolio/.env` | Real secrets, outside git, never touched by a deploy |
-| `/etc/nginx/sites-available/portfolio.conf` | Copy of `deploy/nginx/portfolio.conf` |
-| `/root/cert/<domain>/` | acme.sh certificates, shared with the 3x-ui Hysteria2 inbound |
+| `$APP_DIR` | Git checkout of `main`; the compose project lives here |
+| `$APP_DIR/.env`, `$APP_DIR/deploy.env` | Config, outside git, never touched by a deploy |
+| `/usr/local/bin/portfolio-deploy` | Symlink to `scripts/server-deploy.sh` — the stable entry point |
+| `/etc/nginx/sites-available/portfolio.conf` | **Generated** from `deploy/nginx/*.template` on every deploy |
+| `$CERT_DIR/<domain>/` | acme.sh certificates, shared with the 3x-ui Hysteria2 inbound |
+
+Deploys reach the server through the `portfolio-deploy` symlink, so neither the
+scripts nor the CI workflow contains a path into the deployment.
+
+The nginx config is **generated, not copied**. Editing
+`/etc/nginx/sites-available/portfolio.conf` by hand is pointless — the next
+deploy overwrites it. Change the templates instead. A render that fails
+`nginx -t` is rolled back and the deploy aborts without reloading, so a bad
+template cannot take the site down.
 
 The compose stack binds nothing to a public interface: `web` listens on
 `127.0.0.1:3000` behind nginx, `api` and `mongo` are reachable only inside the
@@ -187,13 +213,16 @@ compose network. That matters — Docker writes its own iptables rules and a
 
 ### First-time setup on a fresh server
 
-1. Create `/opt/portfolio/.env` from `.env.example` with real secrets and
-   `NUXT_PUBLIC_SITE_URL=https://mazurovandre.online`.
-2. `git clone` the repository into `/opt/portfolio`.
-3. Install `deploy/nginx/portfolio.conf` and issue the certificates with
-   acme.sh in webroot mode against `/var/www/acme`.
-4. Run `bash scripts/server-deploy.sh`.
-5. Seed once: `pnpm run seed:prod`. This also builds the Mongo indexes, which
+1. `git clone` the repository into the directory of your choice — call it `$APP_DIR`.
+2. Create `$APP_DIR/.env` from `.env.example` with real secrets and the public
+   `NUXT_PUBLIC_SITE_URL`, and `$APP_DIR/deploy.env` from `deploy.env.example`
+   with `SITE_DOMAIN` and any `REDIRECT_DOMAINS`.
+3. `ln -s $APP_DIR/scripts/server-deploy.sh /usr/local/bin/portfolio-deploy`
+4. Issue the certificates with acme.sh in webroot mode against `/var/www/acme`,
+   one per domain, installed into `$CERT_DIR/<domain>/`. nginx needs a
+   throwaway HTTP-only vhost for the first challenge, before any cert exists.
+5. Run `portfolio-deploy`. It renders the nginx config and brings the stack up.
+6. Seed once: `pnpm run seed:prod`. This also builds the Mongo indexes, which
    the app itself will not create (`autoIndex` is off in production).
 
 ## Layout

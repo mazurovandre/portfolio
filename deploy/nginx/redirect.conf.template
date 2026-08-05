@@ -1,0 +1,20 @@
+# One 301-only vhost per entry in REDIRECT_DOMAINS, rendered by
+# scripts/server-deploy.sh and appended to the site config. Skipped entirely
+# when REDIRECT_DOMAINS is empty.
+#
+# Each redirect domain needs its own certificate: the redirect is served over
+# HTTPS, so the TLS handshake happens before nginx can send the 301.
+#
+# Placeholders are substituted with sed, never envsubst — see the header of
+# site.conf.template for why.
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name @@REDIRECT_DOMAIN@@ www.@@REDIRECT_DOMAIN@@;
+
+    ssl_certificate     @@CERT_DIR@@/@@REDIRECT_DOMAIN@@/fullchain.pem;
+    ssl_certificate_key @@CERT_DIR@@/@@REDIRECT_DOMAIN@@/privkey.pem;
+
+    return 301 https://@@SITE_DOMAIN@@$request_uri;
+}

@@ -57,7 +57,8 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
+      # portfolio-deploy is a symlink on the server. Going through it means CI
+      # holds no knowledge of the server's directory layout.
       - name: Pull and rebuild on the server
         run: |
-          ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            'bash /opt/portfolio/scripts/server-deploy.sh'
+          ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'portfolio-deploy'
