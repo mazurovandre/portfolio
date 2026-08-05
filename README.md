@@ -214,6 +214,11 @@ compose network. That matters — Docker writes its own iptables rules and a
 ### First-time setup on a fresh server
 
 1. `git clone` the repository into the directory of your choice — call it `$APP_DIR`.
+   Use the **HTTPS** remote, not SSH: outbound port 22 to `github.com` is blocked
+   from the production host, and for a public repository HTTPS needs no
+   credentials anyway. If the repository is ever made private, use
+   `ssh://git@ssh.github.com:443/<owner>/<repo>.git` — GitHub's alternate SSH
+   endpoint on 443 — together with a read-only deploy key.
 2. Create `$APP_DIR/.env` from `.env.example` with real secrets and the public
    `NUXT_PUBLIC_SITE_URL`, and `$APP_DIR/deploy.env` from `deploy.env.example`
    with `SITE_DOMAIN` and any `REDIRECT_DOMAINS`.
