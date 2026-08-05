@@ -195,7 +195,7 @@ Required GitHub Actions secrets: `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`.
 | `$APP_DIR/.env`, `$APP_DIR/deploy.env` | Config, outside git, never touched by a deploy |
 | `/usr/local/bin/portfolio-deploy` | Symlink to `scripts/server-deploy.sh` — the stable entry point |
 | `/etc/nginx/sites-available/portfolio.conf` | **Generated** from `deploy/nginx/*.template` on every deploy |
-| `$CERT_DIR/<domain>/` | acme.sh certificates for the site — the only TLS Xray sees is nginx's, terminated in front of it |
+| `/root/cert/<domain>/` | acme.sh certificates, loaded by Xray — nginx terminates no TLS on this host |
 
 Deploys reach the server through the `portfolio-deploy` symlink, so neither the
 scripts nor the CI workflow contains a path into the deployment.
@@ -213,23 +213,29 @@ compose network. That matters — Docker writes its own iptables rules and a
 
 ### Sharing 443 with Xray
 
-The host also runs an Xray (3x-ui) VLESS inbound, and **nginx owns 443/tcp
-alone**. Xray listens on `127.0.0.1:8880` in plaintext over WebSocket; nginx
-proxies exactly one path to it — `VLESS_PATH` from `deploy.env` — and serves
-the site on everything else. Consequences worth knowing:
+The host also runs an Xray (3x-ui) VLESS inbound, and **Xray owns 443/tcp**, not
+nginx. It terminates TLS with the site's certificates, keeps the VLESS traffic,
+and falls back with everything else to nginx on loopback — `127.0.0.1:8080` for
+HTTP/1.1 and `:8081` for h2c, chosen by the ALPN the client negotiated. nginx
+keeps 80/tcp for ACME and the plain-HTTP redirect. Consequences worth knowing:
 
-- The site is the cover traffic. A probe of any other path, including the bare
-  domain, gets the real portfolio, because it *is* the real portfolio.
-- Only nginx holds a certificate, so a renewal needs `systemctl reload nginx`
-  and nothing else, and the site does not depend on Xray running. The reverse
-  arrangement — Xray terminating TLS on 443 and falling back to nginx — makes a
-  crashed Xray take the site down with it.
-- WebSocket, not XHTTP or QUIC: it is the one transport every client in use
-  supports (sing-box/podkop included). It rules out XTLS Vision, which is why
-  the inbound's clients carry an empty `flow`.
-- nginx's `proxy_pass` cannot speak the PROXY protocol, so Xray sees every
-  client as `127.0.0.1`. Per-client traffic accounting still works; the panel's
-  IP limit and IP log do not.
+- The site is the cover traffic. Any request that is not VLESS — a scanner's
+  probe included — is served the real portfolio, because it *is* the real
+  portfolio.
+- **The PROXY protocol is load-bearing.** Xray's fallbacks send `xver: 1`, and
+  the loopback listeners are declared `proxy_protocol`. Change one side alone
+  and every request breaks: nginx would either parse the PROXY header as a
+  request line or lose the client's address. It is what makes `X-Forwarded-For`
+  — and therefore the API's rate limiter — see the real client.
+- `$scheme` is `http` on those sockets even though the client is on HTTPS, so
+  the site vhost sets `X-Forwarded-Proto https` literally.
+- Certificates are read by Xray, so a renewal must restart x-ui, not just reload
+  nginx, and every domain served on 443 (including redirect-only ones) needs its
+  certificate listed in the inbound's `tlsSettings.certificates`.
+- The site's availability now depends on Xray. A systemd drop-in
+  (`Restart=always`, `StartLimitIntervalSec=0`) and a two-minute cron watchdog
+  that restarts x-ui when nothing listens on 443 exist because of that — the
+  panel process can stay `active` while the Xray core underneath it crash-loops.
 
 ### First-time setup on a fresh server
 
@@ -244,8 +250,9 @@ the site on everything else. Consequences worth knowing:
    with `SITE_DOMAIN` and any `REDIRECT_DOMAINS`.
 3. `ln -s $APP_DIR/scripts/server-deploy.sh /usr/local/bin/portfolio-deploy`
 4. Issue the certificates with acme.sh in webroot mode against `/var/www/acme`,
-   one per domain, installed into `$CERT_DIR/<domain>/`. nginx needs a
-   throwaway HTTP-only vhost for the first challenge, before any cert exists.
+   one per domain, and point the inbound that owns 443 at them — see *Sharing
+   443 with Xray*. The challenge runs over port 80, which nginx owns from the
+   start, so no certificate has to exist beforehand.
 5. Run `portfolio-deploy`. It renders the nginx config and brings the stack up.
 6. Seed once: `pnpm run seed:prod`. This also builds the Mongo indexes, which
    the app itself will not create (`autoIndex` is off in production).

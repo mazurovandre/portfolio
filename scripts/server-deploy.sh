@@ -22,13 +22,11 @@ BRANCH="${BRANCH:-main}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-30}"
 REDIRECT_DOMAINS="${REDIRECT_DOMAINS:-}"
-# SITE_DOMAIN, CERT_DIR and VLESS_PATH have no defaults on purpose: the first
-# two describe *this* server, and guessing either would render a config that
-# points at the wrong host or at certificates that do not exist. VLESS_PATH is
-# the secret path the VLESS inbound is reachable on — a guessable default
-# would defeat the point of it being secret. The remaining settings above are
-# internal conventions, not environment identity.
-require_var SITE_DOMAIN CERT_DIR VLESS_PATH
+# SITE_DOMAIN has no default on purpose: it describes *this* server, and a
+# guess would render a config for the wrong host. The settings above are
+# internal conventions, not environment identity. Certificate paths are no
+# longer among them — nginx terminates no TLS, Xray does.
+require_var SITE_DOMAIN
 
 NGINX_AVAILABLE=/etc/nginx/sites-available/portfolio.conf
 
@@ -49,8 +47,6 @@ echo "    now at $(git rev-parse --short HEAD) — $(git log -1 --pretty=%s)"
 # friends, which envsubst would happily blank out.
 render() {
   sed -e "s|@@SITE_DOMAIN@@|$SITE_DOMAIN|g" \
-      -e "s|@@CERT_DIR@@|$CERT_DIR|g" \
-      -e "s|@@VLESS_PATH@@|$VLESS_PATH|g" \
       -e "s|@@REDIRECT_DOMAIN@@|${1:-}|g" \
       "$2"
 }
