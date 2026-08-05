@@ -39,7 +39,7 @@ a frontend rebuild.
 
 ```bash
 cp .env.example .env      # fill in ADMIN_TOKEN and IP_HASH_SALT
-docker compose up -d mongo
+pnpm docker:up mongo      # publishes MongoDB on 127.0.0.1:27017
 pnpm install
 pnpm seed                 # populate the database with content
 pnpm dev                  # web :3000, api :4000
@@ -75,7 +75,9 @@ If MongoDB is already installed locally, Docker is not needed for development
 | `pnpm test` | Run the API and frontend test suites |
 | `pnpm typecheck` | Type checking |
 | `pnpm seed` | Populate the database from `apps/api/src/seed/data/portfolio.json` |
-| `pnpm docker:up` | Bring the whole stack up in containers |
+| `pnpm docker:up` | Bring the whole stack up in containers, with MongoDB published locally |
+| `pnpm run deploy` | Push `main` and redeploy production (see below) |
+| `pnpm run seed:prod` | Run the seed inside the production `api` container |
 
 ## Editing content
 
@@ -152,18 +154,47 @@ already describes.
 
 ## Deployment
 
-```bash
-docker compose up --build -d
-```
+Production is **https://mazurovandre.online** on `78.17.80.141`.
+`mazurovandre.ru` 301-redirects there.
 
-Three services come up: `mongo` (with the `mongo-data` volume), `api` (its
-port is not published) and `web` on `:3000`. Before going live:
+### How a deploy happens
 
-1. Fill `.env` with real secrets and a real `NUXT_PUBLIC_SITE_URL`.
-2. Remove the `27017:27017` port mapping from the `mongo` service — it exists
-   only for local development.
-3. Put a reverse proxy with HTTPS (nginx or Caddy) in front of `web`.
-4. Run `pnpm seed` once, with access to the production database.
+Both routes run the same script on the server, `scripts/server-deploy.sh`,
+which fetches `origin/main`, rebuilds the images and waits for the site to
+answer 200 before declaring success:
+
+- **Automatic** — any push to `main` triggers `.github/workflows/deploy.yml`,
+  which typechecks and tests first, then deploys over SSH.
+- **Manual** — `pnpm run deploy` (the bare `pnpm deploy` is a built-in pnpm
+  command, so the `run` is required). It refuses to work from a dirty tree or
+  from a branch other than `main`.
+
+Required GitHub Actions secrets: `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`.
+
+### Server layout
+
+| Path | What it is |
+| --- | --- |
+| `/opt/portfolio` | Git checkout of `main`; the compose project lives here |
+| `/opt/portfolio/.env` | Real secrets, outside git, never touched by a deploy |
+| `/etc/nginx/sites-available/portfolio.conf` | Copy of `deploy/nginx/portfolio.conf` |
+| `/root/cert/<domain>/` | acme.sh certificates, shared with the 3x-ui Hysteria2 inbound |
+
+The compose stack binds nothing to a public interface: `web` listens on
+`127.0.0.1:3000` behind nginx, `api` and `mongo` are reachable only inside the
+compose network. That matters — Docker writes its own iptables rules and a
+`0.0.0.0` publish would bypass ufw entirely.
+
+### First-time setup on a fresh server
+
+1. Create `/opt/portfolio/.env` from `.env.example` with real secrets and
+   `NUXT_PUBLIC_SITE_URL=https://mazurovandre.online`.
+2. `git clone` the repository into `/opt/portfolio`.
+3. Install `deploy/nginx/portfolio.conf` and issue the certificates with
+   acme.sh in webroot mode against `/var/www/acme`.
+4. Run `bash scripts/server-deploy.sh`.
+5. Seed once: `pnpm run seed:prod`. This also builds the Mongo indexes, which
+   the app itself will not create (`autoIndex` is off in production).
 
 ## Layout
 

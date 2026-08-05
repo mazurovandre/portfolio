@@ -1,0 +1,11 @@
+# Local-development overlay. Publishes MongoDB on the host so that `pnpm dev`
+# and `pnpm seed`, which run outside Docker, can reach it.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d mongo
+#
+# `pnpm docker:up` / `pnpm docker:down` already pass both files.
+# It is never used on the server — production runs the base file alone.
+services:
+  mongo:
+    ports:
+      - '127.0.0.1:27017:27017'

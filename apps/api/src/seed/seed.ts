@@ -7,6 +7,7 @@ import { loadConfig } from '../config.js'
 import { ProfileModel } from '../models/profile.js'
 import { TechModel } from '../models/tech.js'
 import { ContactLinkModel } from '../models/contact-link.js'
+import { MessageModel } from '../models/message.js'
 
 const seedFileSchema = z.object({
   profile: profileSchema,
@@ -20,6 +21,10 @@ const seedFileSchema = z.object({
  * The script is idempotent: everything goes through upserts on natural keys
  * (profile.key, tech.name, contactLink.label), and the `messages` collection
  * is never touched — re-running it against production is safe.
+ *
+ * It also builds the indexes. The app itself connects with `autoIndex: false`
+ * in production (see plugins/mongo.ts), so on a fresh database this is the only
+ * thing that creates them.
  */
 export async function seed(uri: string): Promise<void> {
   const dataPath = fileURLToPath(new URL('./data/portfolio.json', import.meta.url))
@@ -27,6 +32,10 @@ export async function seed(uri: string): Promise<void> {
   const data = seedFileSchema.parse(raw)
 
   await mongoose.connect(uri)
+
+  for (const model of [ProfileModel, TechModel, ContactLinkModel, MessageModel]) {
+    await model.syncIndexes()
+  }
 
   await ProfileModel.updateOne({ key: 'default' }, { $set: data.profile }, { upsert: true })
 
@@ -39,7 +48,7 @@ export async function seed(uri: string): Promise<void> {
   }
 
   console.log(
-    `Done: profile, ${data.techs.length} technologies, ${data.contactLinks.length} contact links.`,
+    `Done: indexes, profile, ${data.techs.length} technologies, ${data.contactLinks.length} contact links.`,
   )
 }
 

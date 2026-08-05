@@ -15,8 +15,11 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "seed": "pnpm --filter @portfolio/api seed",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down"
+    "docker:up": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d",
+    "docker:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down",
+    "deploy": "bash scripts/deploy.sh",
+    "deploy:prod": "bash scripts/deploy.sh",
+    "seed:prod": "ssh root@78.17.80.141 'cd /opt/portfolio && docker compose run --rm api node apps/api/dist/seed/seed.js'"
   },
   "devDependencies": {
     "turbo": "^2.10.8",
